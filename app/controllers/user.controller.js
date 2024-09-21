@@ -1,4 +1,4 @@
-import { UserModel } from '../models/user.models.js';
+import User  from '../../models/user.js'; 
 import bcrypt from 'bcryptjs';  // Para el hashing de la contraseña
 import jwt from 'jsonwebtoken';  // Para generar tokens JWT
 
@@ -13,19 +13,24 @@ const register = async (req, res) => {
       return res.status(400).json({ ok: false, msg: "falta el dato username" })
     }
 
-    const user = await UserModel.findUser(username)
-    if(user){
-      return res.status(409).json({ ok: false, msg: "username existe" })
+    // Verifica si el usuario ya existe
+    const existingUser = await User.findOne({ where: { username } });
+    if (existingUser) {
+      return res.status(409).json({ ok: false, msg: "El usuario ya existe" });
     }
 
     const salt = await bcrypt.genSalt(10)
     const hashedPass = await bcrypt.hash(password, salt)
-    const newUser = await UserModel.create(username, hashedPass);
+    // Crear el nuevo usuario
+    const newUser = await User.create({
+      username,
+      password: hashedPass
+    });
 
     // Generar el token JWT para el nuevo usuario
     const token = jwt.sign({ id: newUser.id, username: newUser.username }, 
       process.env.JWT_SECRET, {
-      expiresIn: '1h' 
+      expiresIn: '3h' 
     });
 
     // Retornar el token junto con el registro exitoso
@@ -52,7 +57,7 @@ const login = async (req, res) => {
     const {username, password} = req.body
 
     // Validar si el usuario existe
-    const user = await UserModel.findUser(username);
+    const user = await User.findOne({ where: { username } });
     if (!user) {
       return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });
     }
@@ -65,7 +70,7 @@ const login = async (req, res) => {
 
     // Crear el JWT 
     const token = jwt.sign({ id: user.id, username: user.username }, process.env.JWT_SECRET, {
-      expiresIn: '1h'  
+      expiresIn: '3h'  
     });
 
     // Enviar el token al cliente
@@ -111,7 +116,7 @@ const login = async (req, res) => {
 const profile = async (req, res) => {
   try {
     // req.user ya contiene la información del usuario del token JWT
-    const user = await UserModel.findUser(req.user.username);
+    const user = await User.findOne(req.user.username);
 
     if (!user) {
       return res.status(404).json({ ok: false, msg: 'Usuario no encontrado' });

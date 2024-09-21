@@ -1,30 +1,31 @@
-import pg from 'pg';
+import { Sequelize } from 'sequelize';
 import dotenv from 'dotenv';
 dotenv.config();  // Cargar las variables de entorno
-const { Pool } = pg;
 
-const db = new Pool({
-  user: process.env.DB_USERNAME,
+const sequelize = new Sequelize(
+  process.env.DB_DATABASE,  // Nombre de la base de datos
+  process.env.DB_USERNAME,  // Usuario
+  process.env.DB_PASSWORD,  // Contraseña
+  {
   host: process.env.DB_HOST,
-  database: process.env.DB_DATABASE,
-  password: String(process.env.DB_PASSWORD),
+  dialect: 'postgres',  // Aquí especificas el dialecto
+  port: process.env.DB_PORT,
 });
 
-// Crear la tabla "users" si no existe
+// Verificar conexión
 const initDB = async () => {
-  const createUsersTableQuery = `
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      username VARCHAR(100) UNIQUE NOT NULL,
-      password VARCHAR(255) NOT NULL
-    );
-  `;
   try {
-    await db.query(createUsersTableQuery);
-    console.log('Tabla "users" verificada/creada correctamente');
+    await sequelize.authenticate();
+    console.log('Conexión a la base de datos establecida correctamente.');
+
+    // Sincronizar todos los modelos con la base de datos
+    await sequelize.sync({ alter: true });  // Esto crea las tablas si no existen, alter para actualizar la tabla sin eliminarla
+    //await sequelize.sync({ force: true }); //desde cero
+
+    console.log('Tablas sincronizadas con éxito.');
   } catch (error) {
-    console.error('Error al crear la tabla "users":', error.stack);
+    console.error('No se pudo conectar a la base de datos:', error);
   }
 };
 
-export { db, initDB }; 
+export { sequelize, initDB };
