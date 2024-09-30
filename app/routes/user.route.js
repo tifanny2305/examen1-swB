@@ -10,5 +10,7 @@ router.post('/login', UserController.login)
 router.get('/profile', verifyToken, UserController.profile)
 router.post('/board', verifyToken, BoardController.createBoard)
 router.post('/board/join', verifyToken, BoardController.joinBoard)
+router.post('/board/export', verifyToken, BoardController.exportDiagram)
+router.post('/board/import', verifyToken, BoardController.importDiagram)
 
 export default router;
