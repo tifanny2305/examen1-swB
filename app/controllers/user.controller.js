@@ -30,7 +30,7 @@ const register = async (req, res) => {
     // Generar el token JWT para el nuevo usuario
     const token = jwt.sign({ id: newUser.id, username: newUser.username }, 
       process.env.JWT_SECRET, {
-      expiresIn: '3h' 
+      expiresIn: '8h' 
     });
 
     // Retornar el token junto con el registro exitoso
@@ -70,7 +70,7 @@ const login = async (req, res) => {
 
     // Crear el JWT 
     const token = jwt.sign({ id: user.id, username: user.username }, process.env.JWT_SECRET, {
-      expiresIn: '3h'  
+      expiresIn: '8h'  
     });
 
     // Enviar el token al cliente

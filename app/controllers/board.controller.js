@@ -113,8 +113,6 @@ import xml2js from 'xml2js';
     }
 };
 
-
-
 // Función para remover prefijos de las claves
 function normalizeKeys(obj) {
   if (Array.isArray(obj)) {
@@ -128,17 +126,6 @@ function normalizeKeys(obj) {
   }
   return obj;
 }
-
-
-
-
-
-
-
-
-
-
-
 
 // Función para importar diagramas XMI desde Enterprise Architect
 const importDiagram = async (req, res) => {
@@ -160,7 +147,7 @@ const importDiagram = async (req, res) => {
 
       // Normalizamos las claves del JSON resultante
       const normalizedResult = normalizeKeys(result);
-      console.log('Resultado del XML parseado normalizado:', JSON.stringify(normalizedResult, null, 2));
+      //console.log('Resultado del XML parseado normalizado:', JSON.stringify(normalizedResult, null, 2));
 
       // Extraer modelo del XMI parseado
       const xmiContent = normalizedResult?.XMI?.['XMI.content']?.[0];
@@ -218,14 +205,33 @@ const importDiagram = async (req, res) => {
                 });
               }
 
+              // Extraer la geometría para las clases (ubicación)
+              /*let location = '';
+              const classGeometry = diagramElements.find(el => el['$'].subject === cls['$']['xmi.id']);
+              if (classGeometry) {
+                const [left, top] = extractCoordinates(classGeometry['$'].geometry);
+                location = `${left} ${top}`;
+              }*/
+
               classes.push({
                 key: cls['$']?.['xmi.id'],
                 name: cls['$']?.['name'] || `Clase_${index + 1}`,
                 attributes: attributes,
                 methods: methods,
+                location: '',
               });
             });
           }
+
+
+          // Crear un mapa entre ea_localid y xmi.id
+          const classIdMap = {};
+          classElements.forEach((cls) => {
+            const eaLocalId = cls['ModelElement.taggedValue']?.[0]?.['TaggedValue']?.find(tagged => tagged['$']?.tag === 'ea_localid')?.['$']?.value;
+            if (eaLocalId) {
+              classIdMap[eaLocalId] = cls['$']?.['xmi.id'];  // Mapear ea_localid al xmi.id
+            }
+          });
 
           // Extraer relaciones (asociaciones/enlaces)
           console.log('Asociaciones encontradas:', associationElements);
@@ -236,14 +242,18 @@ const importDiagram = async (req, res) => {
               let toClassId = null;
               let multiplicityFrom = '';
               let multiplicityTo = '';
+              let relationType  = "Association";
 
               // Extraer los IDs de las clases de origen y destino de los TaggedValues
               taggedValues.forEach((taggedValue) => {
                 if (taggedValue['$']?.tag === 'ea_sourceID') {
-                  fromClassId = taggedValue['$']?.value;
+                  fromClassId = classIdMap[taggedValue['$']?.value];
                 }
                 if (taggedValue['$']?.tag === 'ea_targetID') {
-                  toClassId = taggedValue['$']?.value;
+                  toClassId = classIdMap[taggedValue['$']?.value];
+                }
+                if (taggedValue['$']?.tag === 'ea_type') {
+                  relationType  = taggedValue['$']?.value; 
                 }
                 if (taggedValue['$']?.tag === 'lb') {
                   multiplicityFrom = taggedValue['$']?.value;
@@ -253,13 +263,32 @@ const importDiagram = async (req, res) => {
                 }
               });
 
+              let toArrow = "";
+              switch (relationType ) {
+                case "Association":
+                  toArrow = "";  
+                  break;
+                case "Aggregation":
+                  toArrow = "StretchedDiamond"; 
+                  break;
+                case "Composition":
+                  toArrow = "FilledDiamond";  // Flecha para composición "StretchedDiamond",
+                  break;
+                case "Generalization":
+                  toArrow = "RoundedTriangle";
+                  break;
+              }
+
               if (fromClassId && toClassId) {
                 relationships.push({
                   from: fromClassId,
                   to: toClassId,
                   text: assoc['$']?.['name'] || 'Association',
                   multiplicityFrom: multiplicityFrom,
-                  multiplicityTo: multiplicityTo
+                  multiplicityTo: multiplicityTo,
+                  toArrow: toArrow,
+                  relationType: relationType,
+                  subject: assoc['$']?.['xmi.id']
                 });
               } else {
                 console.log('Relación sin clases asociadas:', assoc);
@@ -267,6 +296,83 @@ const importDiagram = async (req, res) => {
             });
           }
         });
+      }
+
+      // Verificar el contenido del XMI y recorrer las etiquetas
+      const diagram = xmiContent?.Diagram?.[0]; // Accede a la etiqueta <Diagram>;
+
+      if (!diagram) {
+        console.error('No se encontró el diagrama en el XMI.');
+        return;
+      }
+
+      // Extraer los tagged values (si es necesario)
+      const taggedValues = diagram?.['ModelElement.taggedValue']?.[0]?.['TaggedValue'] || [];
+      console.log('Tagged values encontrados:', taggedValues);
+
+      // Extraer los elementos dentro de <UML:Diagram.element>
+      const diagramElements = diagram?.['Diagram.element']?.[0]?.['DiagramElement'] || [];
+
+      if (!diagramElements.length) {
+        console.error('No se encontraron elementos del diagrama.');
+      } else {
+        console.log('Diagram elements encontrados:', diagramElements);
+      }
+
+      // Recorrer cada elemento del diagrama y extraer la geometría
+      diagramElements.forEach((element) => {
+        const geometry = element['$']?.geometry; // Obtener la geometría
+        const subject = element['$']?.subject; // ID de la clase o relación
+
+        if (!geometry) {
+          console.warn('Elemento sin geometría:', element);
+          return;
+        }
+
+        // Si el elemento es una clase
+        if (geometry.includes('Left') && geometry.includes('Top')) {
+          const [left, top] = extractCoordinates(geometry); // Extraer las coordenadas de clase
+          const classData = classes.find(cls => cls.key === subject); // Buscar la clase por su ID
+          if (classData) {
+            classData.location = `${left} ${top}`; // Ajustar la posición de la clase
+            console.log(`Clase ${classData.name} posicionada en: ${classData.location}`);
+          } else {
+            console.warn('Clase no encontrada para el subject:', subject);
+          }
+        }
+
+        // Si el elemento es una relación (enlace)
+        if (geometry.includes('SX') && geometry.includes('EX')) {
+          const linkData = relationships.find(rel => rel.subject === subject); // Buscar la relación por su ID
+          if (linkData) {
+            const coords = extractLinkCoordinates(geometry); // Extraer las coordenadas de los puertos
+            linkData.fromPort = `${coords.fromPort.x}, ${coords.fromPort.y}`;
+            linkData.toPort = `${coords.toPort.x}, ${coords.toPort.y}`;
+            console.log(`Relación ${linkData.text} posicionada con puertos:`, linkData);
+          } else {
+            console.warn('Relación no encontrada para el subject:', subject);
+          }
+        }
+      });
+
+      // Función para extraer las coordenadas de las clases desde la geometría
+      function extractCoordinates(geometryString) {
+        const left = parseFloat(geometryString.match(/Left=(\d+)/)?.[1]);
+        const top = parseFloat(geometryString.match(/Top=(\d+)/)?.[1]);
+        return [left, top];
+      }
+
+      // Función para extraer las coordenadas de los enlaces desde la geometría
+      function extractLinkCoordinates(geometryString) {
+        const fromPort = {
+          x: parseFloat(geometryString.match(/SX=(\d+)/)?.[1]),
+          y: parseFloat(geometryString.match(/SY=(\d+)/)?.[1])
+        };
+        const toPort = {
+          x: parseFloat(geometryString.match(/EX=(\d+)/)?.[1]),
+          y: parseFloat(geometryString.match(/EY=(\d+)/)?.[1])
+        };
+        return { fromPort, toPort };
       }
 
       console.log('Clases extraídas:', classes);
@@ -283,32 +389,6 @@ const importDiagram = async (req, res) => {
     res.status(500).json({ message: 'Error interno del servidor' });
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 //Exporta JSON a XML
 const exportDiagram = async (req, res) => {
@@ -509,17 +589,6 @@ const exportDiagram = async (req, res) => {
     res.status(500).json({ message: 'Error al exportar el diagrama' });
   }
 };
-
-
-
-
-
-
-
-
-
-
-
 
 export const BoardController = {
     createBoard,

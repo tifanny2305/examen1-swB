@@ -36,33 +36,108 @@ const io = new Server(server, {
 
 // Aplicar el middleware de autenticación para Socket.IO
 io.use(verifySocketToken);  
+let diagramas = {};
+const usersInRooms = {};
 
 // Unirse a una sala específica
 io.on("connection", (socket) => {
-  console.log(`Un usuario se ha conectado con ID: ${socket.id}, User ID: ${socket.userId}`);
+  console.log(`Conectado con ID: ${socket.id}, User ID: ${socket.username}`);
 
+  // Sala de ingreso
   socket.on('joinBoard', ({ codigo }) => {
     if (!codigo) {
       console.error('Código de sala no proporcionado');
       return;
     }
-    console.log(`User ${socket.userId} joined board ${codigo}`);
-    socket.join(codigo);  // El usuario se une a la sala
-    socket.broadcast.to(codigo).emit('userJoined', { userId: socket.userId });
+    
+    console.log(`User ${socket.username} se unió a la sala: ${codigo}`);
+    socket.join(codigo); 
+    //console.log(`User ${socket.username } se unio a ls sala: ${codigo}`);
+
+    // Enviar el estado actual del diagrama a este usuario
+    if (diagramas[codigo]) {
+      socket.emit('diagramData', diagramas[codigo]);
+    }
+
+    // Agregar el usuario a la lista de usuarios en la sala
+    if (!usersInRooms[codigo]) {
+      usersInRooms[codigo] = [];
+    }
+
+    // Asegurarse de que no haya duplicados
+    if (!usersInRooms[codigo].includes(socket.username)) {
+      usersInRooms[codigo].push(socket.username);
+    }
+    
+    // Notificar a todos los usuarios en la sala que uno nuevo se unió
+    socket.broadcast.to(codigo).emit('Nuevo usuario se conecto', { userId: socket.userId  });
+    
+    // Enviar la lista de usuarios actuales en la sala
+    socket.emit('currentUsers', usersInRooms[codigo]);
+  
   });
   
+  // Solicitar datos del diagrama dinámico
+  socket.on('requestDiagramData', async ({ roomCode }) => {
+    try {
+      if (!diagramas[roomCode]) {
+        diagramas[roomCode] = {
+          roomCode,
+          nodeDataArray: [],  // Inicialmente vacío
+          linkDataArray: []   // Inicialmente vacío
+        };
+      }
+      // Envía los datos del diagrama específico de la sala solicitada
+      socket.emit('diagramData', diagramas[roomCode]); 
+    } catch (error) {
+      console.error('Error al obtener el diagrama:', error);
+    }
+  });
 
   // Manejar actualizaciones de diagramas
   socket.on('sendDiagramUpdate', (data) => {
-    const { codigo, diagramJson  } = data;   
-    console.log(`Actualización del diagrama recibida en la sala ${codigo}`);
-    socket.to(codigo).emit('reciveDiagramUpdate', diagramJson ); 
+    const { roomCode, updateType, data: updateData } = data;
+  
+    // Dependiendo del tipo de acción, aplicar los cambios en el diagrama de la sala
+    if (updateType === 'addClass') {
+      // Almacenar la nueva clase en el diagrama de la sala
+      diagramas[roomCode].nodeDataArray.push(updateData);
+
+    } else if (updateType === 'updateNodePosition') {
+      const nodeToUpdate = diagramas[roomCode].nodeDataArray.find(node => node.key === updateData.key);
+      if (nodeToUpdate) {
+        nodeToUpdate.location = updateData.location;
+      }
+
+    } else if (updateType === 'updateAttribute') {
+      const classToUpdate = diagramas[roomCode].nodeDataArray.find(node => node.key === updateData.key);
+      if (classToUpdate) {
+        classToUpdate.attributes.push(updateData.newAttribute);
+      }
+    } else if (updateType === 'updateMethod') {
+      const classToUpdate = diagramas[roomCode].nodeDataArray.find(node => node.key === updateData.key);
+      if (classToUpdate) {
+        classToUpdate.methods.push(updateData.newMethod);
+      }
+    }
+  
+    // Emitir los cambios a todos los demás usuarios en la sala
+    socket.broadcast.to(roomCode).emit('reciveDiagramUpdate', {
+      updateType: updateType,
+      data: updateData
+    });
+
   });
   
-
   // Manejar la desconexión
   socket.on('disconnect', () => {
-    console.log(`El usuario con ID ${socket.id} se ha desconectado`);
+    console.log(`El usuario ${socket.username } se salio de la sala`);
+
+    for (const room in usersInRooms) {
+      usersInRooms[room] = usersInRooms[room].filter(user => user !== socket.username);
+      socket.broadcast.to(room).emit('userDisconnected', { username: socket.username });
+    }
+
   });
 
 });
