@@ -12,7 +12,7 @@ import { Model, DataTypes } from 'sequelize';
 
       // Relación muchos a muchos: Un board puede tener muchos usuarios invitados
       Board.belongsToMany(models.User, {
-        through: models.User_Board,
+        through: models.users_boards,
         foreignKey: 'boardId',
         otherKey: 'userId',
         as: 'participants'

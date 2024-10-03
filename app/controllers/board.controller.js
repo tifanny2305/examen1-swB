@@ -1,5 +1,6 @@
 import Board  from '../../models/board.js'; 
 import users_boards from '../../models/user_boards.js';
+import User from '../../models/user.js';
 import { v4 as uuidv4 } from 'uuid'; 
 import xmlbuilder from 'xmlbuilder';
 import xml2js from 'xml2js';
@@ -24,7 +25,8 @@ import xml2js from 'xml2js';
       await users_boards.create({
         userId,
         boardId: board.id,
-        rol: 'admin'  // Asignar rol de admin
+        rol: 'admin',  // Asignar rol de admin
+        diagramJson: diagram
       });
   
       // Retornar la respuesta con el código y la información de la board
@@ -111,6 +113,58 @@ import xml2js from 'xml2js';
       console.error(error);
       return res.status(500).json({ ok: false, msg: 'Error del servidor' });
     }
+};
+
+// Obtener las salas donde el usuario es admin
+const getAdminBoards = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Paso 1: Obtener todas las filas de la tabla users_boards donde el rol sea 'admin'
+    const userBoards = await users_boards.findAll({
+      where: {
+        userId: userId,
+        rol: 'admin'
+      }
+    });
+
+    if (userBoards.length === 0) {
+      return res.status(200).json({
+        ok: true,
+        boards: [],
+        msg: 'No tienes salas creadas como administrador.'
+      });
+    }
+    const boards = [];
+    const addedBoards = new Set();
+    for (const userBoard of userBoards) {
+      const board = await Board.findOne({
+        where: {
+          id: userBoard.boardId,
+          userId: userId  // Solo salas que haya creado el usuario (evitamos duplicados)
+        }
+      });
+
+      // Solo añadimos la board si se encontró en la base de datos
+      if (board && !addedBoards.has(board.id)) {  // Evitar duplicados
+        boards.push({
+          id: board.id,
+          name: board.name,
+          codigo: board.codigo
+        });
+        addedBoards.add(board.id);  // Añadir el board.id al Set para evitar agregarlo de nuevo
+      }
+    }
+
+    return res.status(200).json({
+      ok: true,
+      boards: boards
+    });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: 'Error en el sistema' });
+  }
 };
 
 // Función para remover prefijos de las claves
@@ -416,7 +470,7 @@ const exportDiagram = async (req, res) => {
 
     //AGREGAR TODAS LAS CLASES
     diagramData.nodeDataArray.forEach((node) => {
-      const classId = `class_${node.key}`; 
+      const classId = `class_${uuidv4()}`; 
       classIds[node.key] = classId; 
 
       const classElement = namespace.ele('UML:Class', {
@@ -473,7 +527,7 @@ const exportDiagram = async (req, res) => {
 
     //AGREGAR TODAS LAS RELACIONES
     diagramData.linkDataArray.forEach((link, index) => {
-      const assocId = `assoc_${index}`;
+      const assocId = `assoc_${uuidv4()}`;
 
       const association = namespace.ele('UML:Association', {
         'xmi.id': assocId,
@@ -590,10 +644,81 @@ const exportDiagram = async (req, res) => {
   }
 };
 
+// Guardar el diagrama en formato JSON
+const saveDiagram = async (req, res) => {
+  try {
+    const { diagram } = req.body;  // Asegúrate de que estás recibiendo el diagrama correctamente
+    const userId = req.user.id;    // El ID del usuario autenticado
+    const { codigo } = req.params;    // Obtener el ID del usuario desde el token
+
+    if (!diagram) {
+      return res.status(400).json({ ok: false, msg: 'No se envió el diagrama' });
+    }
+
+    // Buscar el board por el código
+    const board = await Board.findOne({ where: { codigo } });
+    if (!board) {
+      return res.status(404).json({ ok: false, msg: 'Board no encontrada' });
+    }
+
+    const boardId = board.id;
+
+    // Guardar el diagrama en la tabla users_boards
+    await users_boards.update(
+      { diagramJson: diagram },  // Actualiza el campo con el JSON del diagrama
+      { where: { userId, boardId } }  // Encuentra el registro correspondiente al usuario y la sala
+    );
+
+    return res.status(200).json({ ok: true, msg: 'Diagrama guardado con éxito' });
+
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ ok: false, msg: 'Error al guardar el diagrama' });
+  }
+};
+
+// Obtener el diagrama guardado
+const getDiagram = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { codigo } = req.params;  
+
+    // Asegúrate de buscar el boardId correcto basado en el código
+    const board = await Board.findOne({ where: { codigo } });
+    
+    if (!board) {
+      return res.status(404).json({ ok: false, msg: 'Board no encontrada' });
+    }
+
+    const boardId = board.id;
+
+    // Busca el diagrama en la tabla users_boards
+    const userBoard = await users_boards.findOne({
+      where: { userId, boardId }  // Asegúrate de que boardId no sea undefined
+    });
+
+    if (!userBoard) {
+      return res.status(404).json({ ok: false, msg: 'No se encontró el diagrama para esta sala' });
+    }
+
+    // Retornar el JSON del diagrama
+    return res.status(200).json({
+      ok: true,
+      diagram: userBoard.diagramJson
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ ok: false, msg: 'Error al cargar el diagrama' });
+  }
+};
+
 export const BoardController = {
     createBoard,
     joinBoard,
     deleteBoard, 
     exportDiagram,
-    importDiagram
+    importDiagram,
+    getAdminBoards,
+    saveDiagram,
+    getDiagram
 }

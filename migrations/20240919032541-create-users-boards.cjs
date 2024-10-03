@@ -36,6 +36,10 @@ module.exports = {
         onDelete: 'CASCADE', // Elimina la relación si la pizarra es eliminada
         allowNull: false
       },
+      diagramJson: {
+        type: DataTypes.TEXT, // Cambiado a TEXT para almacenar JSON
+        allowNull: true 
+      },
       createdAt: {
         allowNull: false,
         type: DataTypes.DATE,

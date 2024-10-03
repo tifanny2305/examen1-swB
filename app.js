@@ -52,7 +52,6 @@ io.on("connection", (socket) => {
     
     console.log(`User ${socket.username} se unió a la sala: ${codigo}`);
     socket.join(codigo); 
-    //console.log(`User ${socket.username } se unio a ls sala: ${codigo}`);
 
     // Enviar el estado actual del diagrama a este usuario
     if (diagramas[codigo]) {
@@ -76,7 +75,7 @@ io.on("connection", (socket) => {
     socket.emit('currentUsers', usersInRooms[codigo]);
   
   });
-  
+
   // Solicitar datos del diagrama dinámico
   socket.on('requestDiagramData', async ({ roomCode }) => {
     try {
@@ -97,11 +96,17 @@ io.on("connection", (socket) => {
   // Manejar actualizaciones de diagramas
   socket.on('sendDiagramUpdate', (data) => {
     const { roomCode, updateType, data: updateData } = data;
+
+    if (!diagramas[roomCode]) {
+      diagramas[roomCode] = { nodeDataArray: [], linkDataArray: [] };
+    }   
   
     // Dependiendo del tipo de acción, aplicar los cambios en el diagrama de la sala
     if (updateType === 'addClass') {
-      // Almacenar la nueva clase en el diagrama de la sala
       diagramas[roomCode].nodeDataArray.push(updateData);
+
+    } else if (updateType === 'addLink') {
+      diagramas[roomCode].linkDataArray.push(updateData);
 
     } else if (updateType === 'updateNodePosition') {
       const nodeToUpdate = diagramas[roomCode].nodeDataArray.find(node => node.key === updateData.key);
@@ -114,10 +119,59 @@ io.on("connection", (socket) => {
       if (classToUpdate) {
         classToUpdate.attributes.push(updateData.newAttribute);
       }
+
     } else if (updateType === 'updateMethod') {
       const classToUpdate = diagramas[roomCode].nodeDataArray.find(node => node.key === updateData.key);
       if (classToUpdate) {
         classToUpdate.methods.push(updateData.newMethod);
+      }
+
+    } else if (updateType === 'removeAttribute') {
+      const classToUpdate = diagramas[roomCode].nodeDataArray.find(node => node.key === updateData.key);
+      if (classToUpdate) {
+        classToUpdate.attributes = classToUpdate.attributes.filter(attribute => attribute.name !== updateData.attributeName);
+      }
+
+    } else if (updateType === 'removeMethod') {
+      const classToUpdate = diagramas[roomCode].nodeDataArray.find(node => node.key === updateData.key);
+      if (classToUpdate) {
+        classToUpdate.methods = classToUpdate.methods.filter(method => method.name !== updateData.methodName);
+      }
+    } else if (updateType === 'addManyToMany') {
+      // Añadir el nodo intermedio y los enlaces
+      diagramas[roomCode].nodeDataArray.push(updateData.intermediateClass);
+      diagramas[roomCode].linkDataArray.push(updateData.fromLink);
+      diagramas[roomCode].linkDataArray.push(updateData.toLink);
+  
+    } else if (updateType === 'removeClass') {
+      // Eliminar la clase (nodo) y los enlaces asociados
+      diagramas[roomCode].nodeDataArray = diagramas[roomCode].nodeDataArray.filter(node => node.key !== updateData.key);
+      diagramas[roomCode].linkDataArray = diagramas[roomCode].linkDataArray.filter(link => link.from !== updateData.key && link.to !== updateData.key);
+    
+    } else if (updateType === 'updateClassName') {
+      // Actualizar el nombre de la clase
+      const classToUpdate = diagramas[roomCode].nodeDataArray.find(node => node.key === updateData.key);
+      if (classToUpdate) {
+        classToUpdate.name = updateData.value;
+      }
+  
+    } else if (updateType === 'updateLinkText') {
+      // Actualizar el texto del enlace
+      const linkToUpdate = diagramas[roomCode].linkDataArray.find(link => link.key === updateData.key);
+      if (linkToUpdate) {
+        linkToUpdate.text = updateData.value;
+      }
+    } else if (updateType === 'attributeUp') {
+      // Actualizar los atributos de la clase
+      const classToUpdate = diagramas[roomCode].nodeDataArray.find(node => node.key === updateData.key);
+      if (classToUpdate) {
+        classToUpdate.attributes = updateData.value;  
+      }
+    } else if (updateType === 'methodUp') {
+      // Actualizar los métodos de la clase
+      const classToUpdate = diagramas[roomCode].nodeDataArray.find(node => node.key === updateData.key);
+      if (classToUpdate) {
+        classToUpdate.methods = updateData.value; 
       }
     }
   

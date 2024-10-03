@@ -12,5 +12,8 @@ router.post('/board', verifyToken, BoardController.createBoard)
 router.post('/board/join', verifyToken, BoardController.joinBoard)
 router.post('/board/export', verifyToken, BoardController.exportDiagram)
 router.post('/board/import', verifyToken, BoardController.importDiagram)
+router.get('/access/findAll', verifyToken, BoardController.getAdminBoards)
+router.post('/board/:codigo/save', verifyToken, BoardController.saveDiagram)
+router.get('/board/:codigo/recuperar', verifyToken, BoardController.getDiagram)
 
 export default router;
