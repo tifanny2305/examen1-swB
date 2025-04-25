@@ -26,7 +26,7 @@ import xml2js from 'xml2js';
         userId,
         boardId: board.id,
         rol: 'admin',  // Asignar rol de admin
-        diagramJson: diagram
+        diagramJson: {}
       });
   
       // Retornar la respuesta con el código y la información de la board

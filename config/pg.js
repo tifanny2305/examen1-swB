@@ -28,4 +28,4 @@ const initDB = async () => {
   }
 };
 
-export { sequelize, initDB };
+export { sequelize, initDB }
