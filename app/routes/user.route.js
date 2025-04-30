@@ -10,8 +10,8 @@ router.post('/login', UserController.login)
 router.get('/profile', verifyToken, UserController.profile)
 router.post('/board', verifyToken, BoardController.createBoard)
 router.post('/board/join', verifyToken, BoardController.joinBoard)
-router.post('/board/export', verifyToken, BoardController.exportDiagram)
-router.post('/board/import', verifyToken, BoardController.importDiagram)
+router.post('/board/saveD/:codigo', BoardController.saveDiagram);
+router.get('/board/getD/:codigo', BoardController.getDiagram);
 router.get('/access/findAll', verifyToken, BoardController.getAdminBoards)
 router.post('/board/:codigo/save', verifyToken, BoardController.saveDiagram)
 router.get('/board/:codigo/recuperar', verifyToken, BoardController.getDiagram)

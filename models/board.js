@@ -23,7 +23,8 @@ import { Model, DataTypes } from 'sequelize';
   Board.init({
     name: DataTypes.STRING,
     codigo: DataTypes.STRING,
-    userId: DataTypes.INTEGER
+    userId: DataTypes.INTEGER,
+    diagramJson: DataTypes.JSON,
   }, 
   {
     sequelize,
