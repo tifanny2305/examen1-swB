@@ -30,6 +30,11 @@ module.exports = {
         onDelete: 'CASCADE', // Elimina la relación si el usuario es eliminado
         allowNull: false
       },
+      diagramJson: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        defaultValue: null 
+      },
       createdAt: {
         allowNull: false,
         type: DataTypes.DATE,
