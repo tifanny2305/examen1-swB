@@ -12,9 +12,14 @@ import Board from './models/board.js';
 dotenv.config();
 const app = express();
 
+const allowedOrigins = [
+  'https://lucky-macaron-23acd3.netlify.app'  // tu frontend real
+];
+
 app.use(cors({
-  origin: "*",
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  credentials: true,
 }));
 
 // Configurar Express para leer JSON
